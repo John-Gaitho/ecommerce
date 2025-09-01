@@ -1,0 +1,41 @@
+# Virtual environment
+venv/
+.venv/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.pdm
+
+# Environment files
+.env
+.env.*
+.venv/
+venv/
+
+# Flask/SQLAlchemy
+instance/
+*.sqlite
+*.db
+
+# Migrations
+migrations/
+
+# Logs
+*.log
+
+# IDE/editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# macOS files
+.DS_Store
+
+# Node modules if using frontend
+node_modules/
+dist/
+build/
