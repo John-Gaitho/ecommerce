@@ -15,6 +15,8 @@ def create_app():
     jwt.init_app(app)
     cors.init_app(app)
 
+
+
     # Blueprints
     from .routes.auth import auth_bp
     from .routes.product import products_bp
@@ -24,6 +26,7 @@ def create_app():
     from .routes.reviews import reviews_bp
     from .routes.contact import contact_bp
     from .routes.mpesa import mpesa_bp
+    from .routes.profile import profile_bp
 
     # Register Blueprints
     app.register_blueprint(auth_bp, url_prefix="/api/auth")
@@ -34,10 +37,17 @@ def create_app():
     app.register_blueprint(reviews_bp, url_prefix="/api/reviews")
     app.register_blueprint(contact_bp, url_prefix="/api/contact")
     app.register_blueprint(mpesa_bp, url_prefix="/api/mpesa")
+    app.register_blueprint(profile_bp, url_prefix="/api/profile")
 
     # Health check route
     @app.get("/api/health")
     def health():
         return jsonify({"status": "ok"}), 200
+    
+     # ✅ Serve uploaded files
+    @app.route("/uploads/<path:filename>")
+    def uploaded_file(filename):
+        return send_from_directory(Config.UPLOAD_FOLDER, filename)
+
 
     return app

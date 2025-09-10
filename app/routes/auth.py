@@ -1,67 +1,113 @@
 from flask import Blueprint, request, jsonify
-from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity
-from app.extensions import db
+from app.extensions import db, bcrypt
 from app.models.user import User, UserRole
-from datetime import timedelta
+from flask_jwt_extended import (
+    create_access_token,
+    jwt_required,
+    get_jwt_identity,
+)
 
-auth_bp = Blueprint("auth", __name__)
+auth_bp = Blueprint("auth", __name__, url_prefix="/api/auth")
 
-@auth_bp.post("/register")
+
+@auth_bp.route("/register", methods=["POST"])
 def register():
-    data = request.get_json() or {}
+    data = request.get_json()
     email = data.get("email")
     password = data.get("password")
-    first_name = data.get("first_name")
-    last_name = data.get("last_name")
-    phone_number = data.get("phone_number")
-    address = data.get("address")
+    name = data.get("name")
 
     if not email or not password:
-        return jsonify({"error": "email_and_password_required"}), 400
+        return jsonify({"error": "Email and password are required"}), 400
 
     if User.query.filter_by(email=email).first():
-        return jsonify({"error": "email_already_registered"}), 400
+        return jsonify({"error": "Email already registered"}), 400
 
-    user = User(email=email, first_name=first_name, last_name=last_name,
-                phone_number=phone_number, address=address)
-    user.set_password(password)
-    db.session.add(user)
-    db.session.flush()
+    hashed_pw = bcrypt.generate_password_hash(password).decode("utf-8")
 
-    # default role
-    role = UserRole(user_id=user.id, role="customer")
-    db.session.add(role)
-    db.session.commit()
+    user = User(
+        email=email,
+        password_hash=hashed_pw,
+        name=name if name else "New User",
+        role=UserRole.CUSTOMER,  # ✅ enum safe
+    )
 
-    return jsonify({"message": "registered_successfully"}), 201
+    try:
+        db.session.add(user)
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": f"Database error: {str(e)}"}), 500
 
-@auth_bp.post("/login")
+    token = create_access_token(identity=str(user.id))
+
+    return jsonify(
+        {
+            "access_token": token,
+            "user": user.to_dict(),
+        }
+    ), 201
+
+
+@auth_bp.route("/login", methods=["POST"])
 def login():
-    data = request.get_json() or {}
+    data = request.get_json()
     email = data.get("email")
     password = data.get("password")
 
+    if not email or not password:
+        return jsonify({"error": "Email and password are required"}), 400
+
     user = User.query.filter_by(email=email).first()
-    if not user or not user.check_password(password):
-        return jsonify({"error": "invalid_credentials"}), 401
+    if not user or not bcrypt.check_password_hash(user.password_hash, password):
+        return jsonify({"error": "Invalid email or password"}), 401
 
-    roles = [r.role for r in user.roles]
-    access = create_access_token(identity=str(user.id), additional_claims={"roles": roles}, expires_delta=timedelta(hours=12))
-    return jsonify({"access_token": access, "roles": roles})
+    token = create_access_token(identity=str(user.id))
 
-@auth_bp.get("/me")
+    return jsonify(
+        {
+            "access_token": token,
+            "user": user.to_dict(),
+        }
+    ), 200
+
+
+@auth_bp.route("/me", methods=["GET"])
 @jwt_required()
 def me():
-    uid = get_jwt_identity()
-    user = User.query.get(uid)
+    user_id = get_jwt_identity()
+    user = User.query.get(user_id)
+
     if not user:
-        return jsonify({"error": "not_found"}), 404
-    return jsonify({
-        "id": str(user.id),
-        "email": user.email,
-        "first_name": user.first_name,
-        "last_name": user.last_name,
-        "phone_number": user.phone_number,
-        "address": user.address,
-        "roles": [r.role for r in user.roles]
-    })
+        return jsonify({"error": "User not found"}), 404
+
+    return jsonify(user.to_dict()), 200
+
+
+# ✅ Admin promotion endpoint
+@auth_bp.route("/promote/<uuid:user_id>", methods=["PATCH"])
+@jwt_required()
+def promote(user_id):
+    current_user_id = get_jwt_identity()
+    current_user = User.query.get(current_user_id)
+
+    if not current_user or current_user.role != UserRole.ADMIN:
+        return jsonify({"error": "Admins only"}), 403
+
+    user = User.query.get(user_id)
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+
+    user.role = UserRole.ADMIN
+    db.session.commit()
+
+    return jsonify({"message": f"{user.email} promoted to ADMIN"}), 200
+
+@auth_bp.route("/role", methods=["GET"])
+@jwt_required()
+def get_role():
+    user_id = get_jwt_identity()
+    user = User.query.get(user_id)
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+    return jsonify({"role": user.role.value}), 200

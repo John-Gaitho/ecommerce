@@ -1,48 +1,52 @@
 import uuid
-from datetime import datetime
-from enum import Enum
+from app.extensions import db
 from sqlalchemy.dialects.postgresql import UUID
-from app.extensions import db, bcrypt
+from enum import Enum
 
 
 class UserRole(Enum):
-    ADMIN = "admin"
-    CUSTOMER = "customer"
+    ADMIN = "ADMIN"
+    CUSTOMER = "CUSTOMER"
 
 
 class User(db.Model):
     __tablename__ = "users"
 
     id = db.Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    email = db.Column(db.String(120), unique=True, nullable=False, index=True)
-    password_hash = db.Column(db.String(128), nullable=False)
-    name = db.Column(db.String(120), nullable=False)
-    role = db.Column(db.Enum(UserRole), default=UserRole.CUSTOMER, nullable=False)
+    email = db.Column(db.String(120), unique=True, nullable=False)
+    password_hash = db.Column(db.String(255), nullable=False)
+    name = db.Column(db.String(100), nullable=False)
+    role = db.Column(
+        db.Enum(UserRole, name="user_role"),
+        default=UserRole.CUSTOMER,
+        nullable=False,
+    )
 
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    # ✅ Relationships
+    profile = db.relationship(
+        "Profile",
+        back_populates="user",
+        uselist=False,
+        cascade="all, delete-orphan",
+    )
+    orders = db.relationship("Order", back_populates="user", cascade="all, delete-orphan")
+    reviews = db.relationship("Review", back_populates="user", cascade="all, delete-orphan")
+    cart_items = db.relationship("CartItem", back_populates="user", cascade="all, delete-orphan")
 
-    # Relationships
-    profile = db.relationship("Profile", back_populates="user", uselist=False, cascade="all, delete-orphan")
-    orders = db.relationship("Order", back_populates="user", lazy=True, cascade="all, delete-orphan")
-    cart_items = db.relationship("CartItem", back_populates="user", lazy=True, cascade="all, delete-orphan")
-    reviews = db.relationship("Review", back_populates="user", lazy=True, cascade="all, delete-orphan")
+    # --- Helper properties ---
+    @property
+    def is_admin(self):
+        """Check if the user is an admin"""
+        return self.role == UserRole.ADMIN
 
-    # Password helpers
-    def set_password(self, password):
-        self.password_hash = bcrypt.generate_password_hash(password).decode("utf-8")
-
-    def check_password(self, password):
-        return bcrypt.check_password_hash(self.password_hash, password)
-
+    # --- Serialization ---
     def to_dict(self, include_profile=False):
         data = {
             "id": str(self.id),
             "email": self.email,
             "name": self.name,
-            "role": self.role.value,
-            "created_at": self.created_at.isoformat(),
-            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+            "role": self.role.value if self.role else None,
+            "is_admin": self.is_admin,  # optional convenience
         }
         if include_profile and self.profile:
             data["profile"] = self.profile.to_dict()

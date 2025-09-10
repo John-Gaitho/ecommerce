@@ -1,19 +1,17 @@
-from app.extensions import db 
-from sqlalchemy.dialects.postgresql import JSONB
+from app.extensions import db
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.ext.mutable import MutableDict
-from sqlalchemy.dialects.postgresql import UUID
 import uuid
 
-class Product(db.Model):
 
+class Product(db.Model):
     __tablename__ = "products"
 
-    #id = db.Column(db.String(36), primary_key=True, default=generate_uuid)
     id = db.Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
 
     name = db.Column(db.String(255), nullable=False)
     description = db.Column(db.Text)
-    image_url = db.Column(db.Text)
+    image_url = db.Column(db.Text)  # can be null, fallback in to_dict
     slug = db.Column(db.String(255), nullable=False, unique=True)
     category = db.Column(db.String(100), default="cups")
     price = db.Column(db.Numeric(10, 2), nullable=False)
@@ -29,19 +27,35 @@ class Product(db.Model):
     )
 
     # Relationships
-    reviews = db.relationship("Review", back_populates="product", lazy=True, cascade="all, delete-orphan")
-    order_items = db.relationship("OrderItem", back_populates="product", lazy=True, cascade="all, delete-orphan")
-    cart_items = db.relationship("CartItem", back_populates="product", lazy=True, cascade="all, delete-orphan")
+    reviews = db.relationship(
+        "Review",
+        back_populates="product",
+        lazy=True,
+        cascade="all, delete-orphan"
+    )
+    order_items = db.relationship(
+        "OrderItem",
+        back_populates="product",
+        lazy=True,
+        cascade="all, delete-orphan"
+    )
+    cart_items = db.relationship(
+        "CartItem",
+        back_populates="product",
+        lazy=True,
+        cascade="all, delete-orphan"
+    )
 
     def to_dict(self, include_relationships=False):
+        """Serialize product to JSON-friendly dict with default image fallback."""
         data = {
-            "id": self.id,
+            "id": str(self.id),  # UUIDs must be cast to str for JSON
             "name": self.name,
             "description": self.description,
-            "image_url": self.image_url,
+            "image_url": self.image_url if self.image_url else "/static/default_product.png",
             "slug": self.slug,
             "category": self.category,
-            "price": float(self.price),  # cast Decimal -> float for JSON
+            "price": float(self.price) if self.price is not None else 0.0,
             "stock_quantity": self.stock_quantity,
             "is_featured": self.is_featured,
             "specifications": self.specifications,
