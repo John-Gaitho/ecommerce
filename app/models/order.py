@@ -3,6 +3,9 @@ from datetime import datetime
 from app.extensions import db
 from sqlalchemy.dialects.postgresql import UUID
 
+ORDER_STATUSES = ["pending", "processing", "shipped", "delivered", "cancelled"]
+
+
 class Order(db.Model):
     __tablename__ = "orders"
 

@@ -6,13 +6,14 @@ from flask_jwt_extended import (
     jwt_required,
     get_jwt_identity,
 )
+from app.utils.jwt_utils import roles_required  # ✅ import your decorator
 
 auth_bp = Blueprint("auth", __name__, url_prefix="/api/auth")
 
 
 @auth_bp.route("/register", methods=["POST"])
 def register():
-    data = request.get_json()
+    data = request.get_json() or {}
     email = data.get("email")
     password = data.get("password")
     name = data.get("name")
@@ -29,7 +30,7 @@ def register():
         email=email,
         password_hash=hashed_pw,
         name=name if name else "New User",
-        role=UserRole.CUSTOMER,  # ✅ enum safe
+        role=UserRole.CUSTOMER,  # default role
     )
 
     try:
@@ -51,7 +52,7 @@ def register():
 
 @auth_bp.route("/login", methods=["POST"])
 def login():
-    data = request.get_json()
+    data = request.get_json() or {}
     email = data.get("email")
     password = data.get("password")
 
@@ -84,16 +85,11 @@ def me():
     return jsonify(user.to_dict()), 200
 
 
-# ✅ Admin promotion endpoint
+# ✅ Admin promotion endpoint using roles_required
 @auth_bp.route("/promote/<uuid:user_id>", methods=["PATCH"])
 @jwt_required()
+@roles_required(UserRole.ADMIN)
 def promote(user_id):
-    current_user_id = get_jwt_identity()
-    current_user = User.query.get(current_user_id)
-
-    if not current_user or current_user.role != UserRole.ADMIN:
-        return jsonify({"error": "Admins only"}), 403
-
     user = User.query.get(user_id)
     if not user:
         return jsonify({"error": "User not found"}), 404
@@ -103,6 +99,8 @@ def promote(user_id):
 
     return jsonify({"message": f"{user.email} promoted to ADMIN"}), 200
 
+
+# ✅ Role check
 @auth_bp.route("/role", methods=["GET"])
 @jwt_required()
 def get_role():

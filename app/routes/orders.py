@@ -12,7 +12,7 @@ def serialize_order(order):
         "id": str(order.id),
         "user_id": str(order.user_id),
         "status": order.status,
-        "total_price": order.total_price,  # ensure your Order model has this column
+        "total_price": order.total_price,
         "created_at": order.created_at.isoformat(),
         "updated_at": order.updated_at.isoformat(),
     }
@@ -24,17 +24,21 @@ def orders():
     current_user_id = get_jwt_identity()
     user = User.query.get(current_user_id)
 
+    # GET orders
     if request.method == "GET":
-        if not user or user.role != UserRole.ADMIN:  # <-- fixed
+        if not user or user.role != UserRole.ADMIN:
             orders = Order.query.filter_by(user_id=current_user_id).all()
         else:
             orders = Order.query.all()
         return jsonify([serialize_order(o) for o in orders])
 
+    # POST create new order
     if request.method == "POST":
         data = request.json
+
+        # User can only create their own orders unless admin
         if data["user_id"] != str(current_user_id):
-            if not user or user.role != UserRole.ADMIN:  # <-- fixed
+            if not user or user.role != UserRole.ADMIN:
                 return jsonify({"error": "You cannot create an order for another user"}), 403
 
         order = Order(
@@ -60,14 +64,16 @@ def order_detail(order_id):
 
     order = Order.query.get_or_404(order_id)
 
+    # GET single order
     if request.method == "GET":
-        if order.user_id != current_user_id and not (user and user.role == UserRole.ADMIN):  # <-- fixed
+        if order.user_id != current_user_id and not (user and user.role == UserRole.ADMIN):
             return jsonify({"error": "You do not have permission to view this order"}), 403
         return jsonify(serialize_order(order))
 
+    # PUT update order -> only ADMIN
     if request.method == "PUT":
-        if order.user_id != current_user_id and not (user and user.role == UserRole.ADMIN):  # <-- fixed
-            return jsonify({"error": "You do not have permission to update this order"}), 403
+        if not user or user.role != UserRole.ADMIN:
+            return jsonify({"error": "Only admins can update orders"}), 403
 
         data = request.json
         if "status" in data:
@@ -83,13 +89,16 @@ def order_detail(order_id):
 
         return jsonify(serialize_order(order))
 
+    # DELETE order -> only ADMIN
     if request.method == "DELETE":
-        if order.user_id != current_user_id and not (user and user.role == UserRole.ADMIN):  # <-- fixed
-            return jsonify({"error": "You do not have permission to delete this order"}), 403
+        if not user or user.role != UserRole.ADMIN:
+            return jsonify({"error": "Only admins can delete orders"}), 403
+
         try:
             db.session.delete(order)
             db.session.commit()
         except Exception as e:
             db.session.rollback()
             return jsonify({"error": f"Database error: {str(e)}"}), 400
+
         return jsonify({"message": "Order deleted"}), 200

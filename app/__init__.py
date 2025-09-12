@@ -1,4 +1,4 @@
-from flask import Flask, jsonify
+from flask import Flask, jsonify, send_from_directory
 from .config import Config
 from .extensions import db, migrate, jwt, cors, bcrypt
 
@@ -27,6 +27,8 @@ def create_app():
     from .routes.contact import contact_bp
     from .routes.mpesa import mpesa_bp
     from .routes.profile import profile_bp
+    from .routes.upload import upload_bp
+
 
     # Register Blueprints
     app.register_blueprint(auth_bp, url_prefix="/api/auth")
@@ -38,6 +40,8 @@ def create_app():
     app.register_blueprint(contact_bp, url_prefix="/api/contact")
     app.register_blueprint(mpesa_bp, url_prefix="/api/mpesa")
     app.register_blueprint(profile_bp, url_prefix="/api/profile")
+    app.register_blueprint(upload_bp, url_prefix="/api/upload")
+    
 
     # Health check route
     @app.get("/api/health")
