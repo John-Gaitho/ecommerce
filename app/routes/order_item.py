@@ -7,7 +7,7 @@ from app.models.order import Order
 from app.models.product import Product
 from app.models.user import User
 
-order_items_bp = Blueprint("order_items", __name__, url_prefix="/order_items")
+order_items_bp = Blueprint("order_items", __name__, url_prefix="/api/order_items")
 
 
 # --- Helper to serialize order items ---

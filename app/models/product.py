@@ -1,7 +1,10 @@
+# app/models/product.py
+
 from app.extensions import db
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.ext.mutable import MutableDict
 import uuid
+from datetime import datetime
 
 
 class Product(db.Model):
@@ -11,7 +14,7 @@ class Product(db.Model):
 
     name = db.Column(db.String(255), nullable=False)
     description = db.Column(db.Text)
-    image_url = db.Column(db.Text)  # can be null, fallback in to_dict
+    image_url = db.Column(db.Text)  # legacy / fallback main image
     slug = db.Column(db.String(255), nullable=False, unique=True)
     category = db.Column(db.String(100), default="cups")
     price = db.Column(db.Numeric(10, 2), nullable=False)
@@ -27,6 +30,12 @@ class Product(db.Model):
     )
 
     # Relationships
+    images = db.relationship(
+        "ProductImage",
+        back_populates="product",
+        cascade="all, delete-orphan",
+        lazy=True
+    )
     reviews = db.relationship(
         "Review",
         back_populates="product",
@@ -47,12 +56,13 @@ class Product(db.Model):
     )
 
     def to_dict(self, include_relationships=False):
-        """Serialize product to JSON-friendly dict with default image fallback."""
+        """Serialize product with multiple Cloudinary images + fallback."""
         data = {
-            "id": str(self.id),  # UUIDs must be cast to str for JSON
+            "id": str(self.id),
             "name": self.name,
             "description": self.description,
-            "image_url": self.image_url if self.image_url else "/static/default_product.png",
+            "image_url": self.image_url or "/static/default_product.png",
+            "images": [img.to_dict() for img in self.images],  # new
             "slug": self.slug,
             "category": self.category,
             "price": float(self.price) if self.price is not None else 0.0,
@@ -72,3 +82,24 @@ class Product(db.Model):
 
     def __repr__(self):
         return f"<Product {self.name} - {self.slug}>"
+
+
+class ProductImage(db.Model):
+    __tablename__ = "product_images"
+
+    id = db.Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    url = db.Column(db.String, nullable=False)
+    public_id = db.Column(db.String, nullable=False)  # needed to delete from Cloudinary
+    product_id = db.Column(UUID(as_uuid=True), db.ForeignKey("products.id"), nullable=False)
+
+    product = db.relationship("Product", back_populates="images")
+
+    def to_dict(self):
+        return {
+            "id": str(self.id),
+            "url": self.url,
+            "public_id": self.public_id,
+        }
+
+    def __repr__(self):
+        return f"<ProductImage {self.url}>"

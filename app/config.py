@@ -1,5 +1,6 @@
 import os
 from dotenv import load_dotenv
+from datetime import timedelta
 
 load_dotenv()
 
@@ -14,9 +15,14 @@ class Config:
     SQLALCHEMY_TRACK_MODIFICATIONS = False
 
     JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "jwt_dev_secret_change_me")
-    JWT_ACCESS_TOKEN_EXPIRES = int(os.getenv("JWT_ACCESS_TOKEN_EXPIRES", "3600"))
-    JWT_REFRESH_TOKEN_EXPIRES = int(os.getenv("JWT_REFRESH_TOKEN_EXPIRES", "2592000"))
-
+    JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "jwt_dev_secret_change_me")
+    JWT_ACCESS_TOKEN_EXPIRES = timedelta(
+        seconds=int(os.getenv("JWT_ACCESS_TOKEN_EXPIRES", "3600"))  # 1 hour default
+    )
+    JWT_REFRESH_TOKEN_EXPIRES = timedelta(
+        seconds=int(os.getenv("JWT_REFRESH_TOKEN_EXPIRES", "2592000"))  # 30 days default
+    )
+    
     FRONTEND_ORIGIN = os.getenv(
         "FRONTEND_ORIGIN",
         "https://199adc73-7161-4f4c-83fc-a98266f4366f.lovableproject.com",

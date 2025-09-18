@@ -1,24 +1,22 @@
 from functools import wraps
-from flask_jwt_extended import get_jwt_identity, verify_jwt_in_request
+from flask_jwt_extended import verify_jwt_in_request, get_jwt
 from flask import jsonify
-from app.models.user import User, UserRole
-
 
 def roles_required(*roles):
     """
     Restrict access to users with specific roles.
     Usage:
-        @roles_required(UserRole.ADMIN)
-        @roles_required(UserRole.ADMIN, UserRole.CUSTOMER)
+        @roles_required("admin")
+        @roles_required("admin", "customer")
     """
     def decorator(fn):
         @wraps(fn)
         def wrapper(*args, **kwargs):
             verify_jwt_in_request()
-            uid = get_jwt_identity()
-            user = User.query.get(uid)
+            claims = get_jwt()
+            user_role = claims.get("role")
 
-            if not user or user.role not in roles:
+            if user_role not in roles:
                 return jsonify({"message": "Forbidden"}), 403
 
             return fn(*args, **kwargs)

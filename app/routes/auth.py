@@ -6,11 +6,11 @@ from flask_jwt_extended import (
     jwt_required,
     get_jwt_identity,
 )
-from app.utils.jwt_utils import roles_required  # ✅ import your decorator
+from app.utils.jwt_utils import roles_required  # ✅ custom decorator
 
 auth_bp = Blueprint("auth", __name__, url_prefix="/api/auth")
 
-
+# --- Register ---
 @auth_bp.route("/register", methods=["POST"])
 def register():
     data = request.get_json() or {}
@@ -40,7 +40,11 @@ def register():
         db.session.rollback()
         return jsonify({"error": f"Database error: {str(e)}"}), 500
 
-    token = create_access_token(identity=str(user.id))
+    # ✅ Include role in JWT
+    token = create_access_token(
+        identity=str(user.id),
+        additional_claims={"role": user.role.value}
+    )
 
     return jsonify(
         {
@@ -49,7 +53,7 @@ def register():
         }
     ), 201
 
-
+# --- Login ---
 @auth_bp.route("/login", methods=["POST"])
 def login():
     data = request.get_json() or {}
@@ -63,7 +67,11 @@ def login():
     if not user or not bcrypt.check_password_hash(user.password_hash, password):
         return jsonify({"error": "Invalid email or password"}), 401
 
-    token = create_access_token(identity=str(user.id))
+    # ✅ Include role in JWT
+    token = create_access_token(
+        identity=str(user.id),
+        additional_claims={"role": user.role.value}
+    )
 
     return jsonify(
         {
@@ -72,7 +80,7 @@ def login():
         }
     ), 200
 
-
+# --- Me ---
 @auth_bp.route("/me", methods=["GET"])
 @jwt_required()
 def me():
@@ -84,11 +92,10 @@ def me():
 
     return jsonify(user.to_dict()), 200
 
-
-# ✅ Admin promotion endpoint using roles_required
+# --- Promote to Admin ---
 @auth_bp.route("/promote/<uuid:user_id>", methods=["PATCH"])
 @jwt_required()
-@roles_required(UserRole.ADMIN)
+@roles_required("admin")  # ✅ now works via JWT claims
 def promote(user_id):
     user = User.query.get(user_id)
     if not user:
@@ -99,8 +106,7 @@ def promote(user_id):
 
     return jsonify({"message": f"{user.email} promoted to ADMIN"}), 200
 
-
-# ✅ Role check
+# --- Get Role ---
 @auth_bp.route("/role", methods=["GET"])
 @jwt_required()
 def get_role():

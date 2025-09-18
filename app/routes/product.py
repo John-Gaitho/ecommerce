@@ -5,10 +5,13 @@ from app.models.product import Product
 from app.utils.decorators import role_required
 from flask_jwt_extended import jwt_required
 from sqlalchemy.exc import IntegrityError
+import cloudinary.uploader
 
 products_bp = Blueprint("products", __name__)
 
-# --- LIST / SEARCH / FILTER / SORT / PAGINATION ---
+# ---------------------------
+# LIST / SEARCH / FILTER / SORT / PAGINATION
+# ---------------------------
 @products_bp.get("/")
 def list_products():
     try:
@@ -74,7 +77,10 @@ def list_products():
     except Exception as e:
         return jsonify({"error": f"Internal server error: {str(e)}"}), 500
 
-# --- GET SINGLE PRODUCT BY SLUG ---
+
+# ---------------------------
+# GET SINGLE PRODUCT BY SLUG
+# ---------------------------
 @products_bp.get("/<slug>")
 def get_product(slug):
     try:
@@ -85,13 +91,54 @@ def get_product(slug):
     except Exception as e:
         return jsonify({"error": f"Internal server error: {str(e)}"}), 500
 
-# --- CREATE PRODUCT (ADMIN ONLY) ---
+
+# ---------------------------
+# CLOUDINARY UPLOAD ENDPOINT
+# ---------------------------
+@products_bp.post("/upload")
+@jwt_required()
+@role_required("admin")
+def upload_image():
+    """Upload a product image to Cloudinary and return its URL"""
+    if "image" not in request.files:
+        return jsonify({"error": "No image file provided"}), 400
+
+    image = request.files["image"]
+
+    try:
+        upload_result = cloudinary.uploader.upload(
+            image,
+            folder="products",
+            resource_type="image"
+        )
+        return jsonify({
+            "message": "Upload successful",
+            "url": upload_result["secure_url"]
+        }), 201
+    except Exception as e:
+        return jsonify({"error": f"Image upload failed: {str(e)}"}), 500
+
+
+# ---------------------------
+# CREATE PRODUCT (ADMIN ONLY)
+# ---------------------------
 @products_bp.post("/")
 @jwt_required()
 @role_required("admin")
 def create_product():
     try:
-        data = request.get_json() or {}
+        data = request.form.to_dict() if request.form else request.get_json() or {}
+
+        # If image file is uploaded, send to Cloudinary
+        image_url = data.get("image_url")
+        if "image" in request.files:
+            upload_result = cloudinary.uploader.upload(
+                request.files["image"],
+                folder="products",
+                resource_type="image"
+            )
+            image_url = upload_result["secure_url"]
+
         required_fields = ["name", "price", "slug"]
         for field in required_fields:
             if field not in data:
@@ -101,7 +148,7 @@ def create_product():
             name=data["name"],
             description=data.get("description"),
             price=data["price"],
-            image_url=data.get("image_url"),
+            image_url=image_url,
             slug=data["slug"],
             category=data.get("category", "cups"),
             specifications=data.get("specifications", {}),
@@ -115,7 +162,10 @@ def create_product():
         db.session.rollback()
         return jsonify({"error": f"Internal server error: {str(e)}"}), 500
 
-# --- UPDATE PRODUCT (ADMIN ONLY) ---
+
+# ---------------------------
+# UPDATE PRODUCT (ADMIN ONLY)
+# ---------------------------
 @products_bp.put("/<slug>")
 @jwt_required()
 @role_required("admin")
@@ -125,8 +175,19 @@ def update_product(slug):
         if not product:
             return jsonify({"error": "Product not found"}), 404
 
-        data = request.get_json() or {}
-        for field in ["name", "description", "price", "image_url", "category", "specifications", "stock_quantity", "is_featured"]:
+        data = request.form.to_dict() if request.form else request.get_json() or {}
+
+        # If image file is uploaded, send to Cloudinary
+        if "image" in request.files:
+            upload_result = cloudinary.uploader.upload(
+                request.files["image"],
+                folder="products",
+                resource_type="image"
+            )
+            data["image_url"] = upload_result["secure_url"]
+
+        for field in ["name", "description", "price", "image_url",
+                      "category", "specifications", "stock_quantity", "is_featured"]:
             if field in data:
                 setattr(product, field, data[field])
 
@@ -136,7 +197,10 @@ def update_product(slug):
         db.session.rollback()
         return jsonify({"error": f"Internal server error: {str(e)}"}), 500
 
-# --- DELETE PRODUCT (ADMIN ONLY) ---
+
+# ---------------------------
+# DELETE PRODUCT (ADMIN ONLY)
+# ---------------------------
 @products_bp.delete("/<slug>")
 @jwt_required()
 @role_required("admin")
